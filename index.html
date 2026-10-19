@@ -391,11 +391,30 @@ function calcTotal(){
 }
 function show(id){document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');window.scrollTo(0,0)}
 async function login(){
- if(!db){alert('La aplicación todavía está iniciando. Esperá unos segundos.');return}
- const msg=document.getElementById('loginMsg');msg.innerHTML='';
- const {data,error}=await db.auth.signInWithPassword({email:email.value.trim(),password:password.value});
- if(error){msg.innerHTML='<div class="error">Correo o contraseña incorrectos.</div>';return}
- openApp(data.user);
+ const msg=document.getElementById('loginMsg');
+ msg.textContent='';
+ if(!db){msg.innerHTML='<div class="error">La conexión todavía está iniciando. Esperá unos segundos y probá de nuevo.</div>';return}
+ const emailInput=document.getElementById('email');
+ const passwordInput=document.getElementById('password');
+ const emailValue=emailInput.value.trim();
+ const passwordValue=passwordInput.value;
+ if(!emailValue || !passwordValue){msg.innerHTML='<div class="error">Completá el correo y la contraseña.</div>';return}
+ const button=document.querySelector('#loginView button');
+ if(button){button.disabled=true;button.textContent='Verificando...'}
+ try{
+  const {data,error}=await db.auth.signInWithPassword({email:emailValue,password:passwordValue});
+  if(error){
+   const safeMessage=String(error.message||'Error de inicio de sesión');
+   msg.innerHTML='<div class="error">No se pudo iniciar sesión: '+safeMessage.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</div>';
+   return;
+  }
+  if(!data || !data.user){msg.innerHTML='<div class="error">Supabase no devolvió un usuario. Probá de nuevo.</div>';return}
+  await openApp(data.user);
+ }catch(e){
+  msg.innerHTML='<div class="error">Error de conexión: '+String(e&&e.message?e.message:e).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</div>';
+ }finally{
+  if(button){button.disabled=false;button.textContent='Ingresar'}
+ }
 }
 async function openApp(user){loginView.classList.add('hidden');app.classList.remove('hidden');userEmail.textContent=user.email;updateMeasures();calcTotal()}
 
