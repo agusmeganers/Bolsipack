@@ -95,8 +95,8 @@ input,select,textarea{width:100%;padding:17px 16px;border:1px solid #d8d8d8;bord
       <div id="itemsBuilder"></div>
       <button type="button" class="btn secondary" onclick="addProductRow()" style="margin:4px 0 18px">＋ Agregar otro producto</button>
       <div class="row">
-        <div class="field"><label>Descuento general</label><input id="discount" type="number" value="0" min="0" oninput="calcTotal()"></div>
-        <div class="field"><label>Seña</label><input id="deposit" type="number" value="0" min="0" oninput="calcTotal()" placeholder="Monto recibido"></div>
+        <div class="field"><label>Descuento general</label><input id="discount" type="number" value="0" min="0" oninput="calcTotal()"><button type="button" class="btn small secondary" style="margin-top:8px" onclick="applyFullPaymentDiscount()">Aplicar 5% y pagar total</button></div>
+        <div class="field"><label>Seña</label><input id="deposit" type="number" value="0" min="0" oninput="calcTotal()" placeholder="Monto recibido"><button type="button" class="btn small secondary" style="margin-top:8px" onclick="setDepositPercent(0.5)">Calcular seña del 50%</button></div>
       </div>
       <div class="total"><span>Total del pedido</span><span id="total">$0</span></div>
       <div class="notice" id="paymentSummary" style="background:#f4f4f4;border-radius:16px;padding:16px;margin-bottom:18px">
@@ -211,7 +211,7 @@ input,select,textarea{width:100%;padding:17px 16px;border:1px solid #d8d8d8;bord
 </div>
 
 <script>
-const SUPABASE_URL='https://otourzghboyzxkttekzz.supabase.co';
+const SUPABASE_URL='https://otourzghboyzxtktekzz.supabase.co';
 const SUPABASE_KEY='sb_publishable_SyAaZCVeNzE3lmY-eDg6cg_3Gd7SGR8';
 let db=null;
 function updateMeasures(){}
@@ -389,6 +389,19 @@ function calcTotal(){
  rows.forEach(x=>x.row.querySelector('.p-total').textContent=money(x.total));
  return {rows,bruto,discount:d,total:final,deposit:sena,saldo};
 }
+function setDepositPercent(percent){
+ const total=calcTotal().total;
+ document.getElementById('deposit').value=Math.round(total*percent);
+ calcTotal();
+}
+function applyFullPaymentDiscount(){
+ const bruto=getProductRows().reduce((sum,x)=>sum+x.total,0);
+ if(bruto<=0)return;
+ document.getElementById('discount').value=Math.round(bruto*0.05);
+ const total=calcTotal().total;
+ document.getElementById('deposit').value=total;
+ calcTotal();
+}
 function show(id){document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');window.scrollTo(0,0)}
 async function login(){
  const msg=document.getElementById('loginMsg');
@@ -416,7 +429,7 @@ async function login(){
   if(button){button.disabled=false;button.textContent='Ingresar'}
  }
 }
-async function openApp(user){loginView.classList.add('hidden');app.classList.remove('hidden');userEmail.textContent=user.email;updateMeasures();calcTotal()}
+async function openApp(user){loginView.classList.add('hidden');app.classList.remove('hidden');userEmail.textContent=user.email;updateMeasures();calcTotal();await loadDashboard()}
 
 async function saveClient(name,phone){
  let {data,error}=await db.from('clientes').select('*').eq('nombre',name).maybeSingle();
@@ -499,8 +512,9 @@ async function openOrder(orderId){
   if(r.error) throw r.error;
   const items=await db.from('pedido_items').select('cantidad,precio_unitario,subtotal,estado,productos(nombre,tipo,medida,material)').eq('pedido_id',orderId);
   if(items.error) throw items.error;
-  const x=r.data, it=items.data?.[0];
-  orderDetailContent.innerHTML=`<div class="detail-box"><b>Pedido #${x.id}</b><span class="pill">${esc(x.estado||'')}</span></div><div class="detail-grid"><div class="detail-box"><b>Cliente</b>${esc(x.clientes?.nombre||'Sin cliente')}<br><span class="muted">${esc(x.clientes?.telefono||'')}</span></div><div class="detail-box"><b>Producto</b>${esc(it?.productos?.tipo||'Sin producto')}<br>${esc(it?.productos?.medida||'')} · ${esc(it?.productos?.material||'')}</div><div class="detail-box"><b>Cantidad</b>${it?.cantidad||0} bolsas</div><div class="detail-box"><b>Precio del lote</b>${money(x.subtotal||0)}</div><div class="detail-box"><b>Descuento</b>${money(x.descuento||0)}</div><div class="detail-box"><b>Producción</b>${esc(x.fecha_produccion||'Sin fecha')}</div><div class="detail-box"><b>Entrega</b>${esc(x.fecha_entrega||'Sin fecha')}</div><div class="detail-box"><b>Estado del ítem</b>${esc(it?.estado||'')}</div></div><div class="detail-total"><span>Total</span><span>${money(x.total||0)}</span></div><div class="actions"><button class="btn" onclick="startSampleForOrder(${x.id})">Continuar a muestra digital →</button><button class="btn danger" onclick="deleteOrder(${x.id})">Eliminar pedido #${x.id}</button></div>`;
+  const x=r.data, itemRows=items.data||[];
+  const productDetails=itemRows.map(it=>'<div style="padding:8px 0;border-top:1px solid #eee"><b>'+esc(it.productos?.tipo||it.productos?.nombre||'Producto')+'</b><br>Medida: '+esc(it.productos?.medida||'—')+' · Cantidad: '+(Number(it.cantidad)||0)+' bolsas<br>Precio: '+money(it.subtotal||0)+' · Estado: '+esc(it.estado||'')+'</div>').join('')||'<span class="muted">No hay productos asociados.</span>';
+  orderDetailContent.innerHTML=`<div class="detail-box"><b>Pedido #${x.id}</b><span class="pill">${esc(x.estado||'')}</span></div><div class="detail-grid"><div class="detail-box"><b>Cliente</b>${esc(x.clientes?.nombre||'Sin cliente')}<br><span class="muted">${esc(x.clientes?.telefono||'')}</span></div><div class="detail-box wide"><b>Productos</b>${productDetails}</div><div class="detail-box"><b>Precio del lote</b>${money(x.subtotal||0)}</div><div class="detail-box"><b>Descuento</b>${money(x.descuento||0)}</div><div class="detail-box"><b>Producción</b>${esc(x.fecha_produccion||'Sin fecha')}</div><div class="detail-box"><b>Entrega</b>${esc(x.fecha_entrega||'Sin fecha')}</div><div class="detail-box"><b>Estado del ítem</b>${esc(it?.estado||'')}</div></div><div class="detail-total"><span>Total</span><span>${money(x.total||0)}</span></div><div class="actions"><button class="btn" onclick="startSampleForOrder(${x.id})">Continuar a muestra digital →</button><button class="btn danger" onclick="deleteOrder(${x.id})">Eliminar pedido #${x.id}</button></div>`;
  }catch(e){orderDetailContent.innerHTML='<div class="error">No se pudo cargar el pedido: '+esc(e.message||'error')+'</div>'}
 }
 
